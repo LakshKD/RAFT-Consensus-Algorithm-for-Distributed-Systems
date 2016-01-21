@@ -4,29 +4,23 @@ import (
     "fmt"
     "net"
     "os"
-    //"io"
     "io/ioutil"
-   //"strconv"
-     "strings" 
-    //"bytes"
-     "strconv"	
+    "strings" 
+    "strconv"	
 )
 
 const (  
-    HOST = ""
-    PORT = "8089"
+    HOST = "127.0.0.1"
+    PORT = "8080"
     TYPE = "tcp"
     lb = "<"
     rb = ">"  
 )
-
 type Filestats struct {
      version int64
      numofbytes int
      exptime int	
-
 }
-
 var files map[string]Filestats
 
 func serverMain(){
@@ -46,7 +40,7 @@ func serverMain(){
    p, err := net.Listen(TYPE, ":"+PORT)   // Listen for incoming connections.
     if err != nil {
         fmt.Println("Error on listening:", err.Error())
-        os.Exit(1)
+        //os.Exit(1)
     }
     
     defer p.Close()  // Close the listener when the application closes.
@@ -56,10 +50,10 @@ func serverMain(){
         conn, err := p.Accept()  // Listen for an incoming connection.
         if err != nil {
             fmt.Println("Error accepting connections ", err.Error())
-            os.Exit(1)
+            //os.Exit(1)
         }
 
-        go RequestHandler(conn)// Handle request
+         go RequestHandler(conn)// Handle request
 	
     }
 }
@@ -72,36 +66,98 @@ func RequestHandler(conn net.Conn) {
     fmt.Println("Error in reading from the read buffer:", err.Error())
   }
    s := string(readbuf[:size])    //Converting into the string
-   p := strings.Fields(s)        //Splitting the string s into the fields in order to extract the Command
-
+   //p := strings.Fields(s)        //Splitting the string s into the fields in order to extract the Command
+   j := strings.Split(s,"\r\n") 
+   //fmt.Println(j) 
+   p := strings.Split(j[0]," ")
+   //fmt.Println(p)
+   p[0] = strings.TrimSpace(p[0])	
   if p[0] == "read"{
-   data, err := ioutil.ReadFile(p[1])   //Reading the file,the filename is in the p[1]
+   data, err := ioutil.ReadFile(strings.TrimSpace(p[1]))   //Reading the file,the filename is in the p[1]
      if err != nil {
          
             conn.Write([]byte("ERR_FILE_NOT_FOUND\n"))    //Sending the error message on the channel to the client
-           os.Exit(1)
+              
+             //os.Exit(1)
      } 
+    p[1]=strings.TrimSpace(p[1])
     conn.Write([]byte("CONTENTS "))
     conn.Write([]byte(lb + strconv.FormatInt(files[p[1]].version,10) + rb + " ")) 
     conn.Write([]byte(lb + strconv.Itoa(files[p[1]].numofbytes) + rb + " "))
-    conn.Write([]byte(lb + strconv.Itoa(files[p[1]].exptime) + rb + "\\r\\n")) 
+    conn.Write([]byte(lb + strconv.Itoa(files[p[1]].exptime) + rb + "\r\n")) 
     conn.Write([]byte("\n")) 
     conn.Write([]byte(data)) // Write the file content in the connection channel.
-    //conn.Write([]byte("\\r\\n"))
+    conn.Write([]byte("\r\n"+"\n"))
      }else if p[0] == "write"{
-          
+           
+          z := strings.Split(s,"\r\n")
+          q := strings.Split(z[0]," ")
          if _, err := os.Stat(p[1]); err == nil {
-	 z := strings.Split(s,"\\r\\n")
-         ioutil.WriteFile(p[1],[]byte(z[1]),0644)
-	 conn.Write([]byte("OK <version>\r\n"))     
+	 
+         ioutil.WriteFile(p[1],[]byte(z[1]),0777)    
+		b, _ := strconv.Atoi(q[2])
+		expt,_ := strconv.Atoi(q[3])
+               
+              files[p[1]] = Filestats {
+                  0,b,expt,
+               }       	   
+             
+             s := strconv.FormatInt(files[p[1]].version,10)
+           conn.Write([]byte("OK" + " " + "<" + s + ">"))         
          } else {
-          conn.Write([]byte("ERR_FILE_NOT_FOUND\n"))
-	    os.Exit(1)
+          ioutil.WriteFile(q[1],[]byte(z[1]),0777)   //r=4,w=2,x=1,If the file exists then data is written into it else the file
+						                                        //is created with the permission 777 and then the data is written into it		
+                 b, _ := strconv.Atoi(q[2])
+		 expt , _ := strconv.Atoi(q[3])                 
+		           
+                    
+                  files[q[1]] = Filestats {
+                   0,b,expt,
+                  } 
+                      
+		s := strconv.FormatInt(files[q[1]].version,10)     
+		conn.Write([]byte("OK" + " " + "<" + s + ">" + "\r\n" + "\n"))
+	                                              //cas <filename> <version> <numbytes> [<exptime>]\r\n
+                                               //<content bytes>\r\n
           } 	   
      }else if p[0] == "cas"{
+         
+      if _, err := os.Stat(p[1]); err == nil {
+              z := strings.Split(s,"\r\n")
+              q := strings.Split(z[0]," ")
+              s := strconv.FormatInt(files[q[1]].version,10)
+               if s == strings.TrimSpace(q[2]){
+                   ioutil.WriteFile(q[1],[]byte(z[1]),0777)
+                     v := files[q[1]].version
+                     b,_ := strconv.Atoi(strings.TrimSpace(q[3]))          //numofbytes
+                     e,_ := strconv.Atoi(strings.TrimSpace(q[4]))           //exptime
+                     delete(files,q[1])
+                     v=v+1                             //Updating the version
+                    files[q[1]] = Filestats {            //Creating a new entry for the file in the map
+                   v,b,e,
+                  } 
+                  s1 := strconv.FormatInt(files[q[1]].version,10)     
+                  conn.Write([]byte("OK" + " " + "<" + s1 + ">" + "\r\n" + "\n"))
 
+               }else {
+                   conn.Write([]byte("ERR_VERSION\n"))
+               }
+
+
+      }else{
+           conn.Write([]byte("ERR_FILE_NOT_FOUND\n"))    
+                 
+      }
 
      }else if p[0] == "delete"{
+         if _, err := os.Stat(p[1]); err == nil{
+             os.Remove(p[1])
+              conn.Write([]byte("OK" + "\r\n" + "\n")) 
+
+         }else{
+            conn.Write([]byte("ERR_FILE_NOT_FOUND\n"))
+         } 
+
 
   
      }
@@ -110,7 +166,6 @@ func RequestHandler(conn net.Conn) {
 
 
 }
-
 func main() {  
    serverMain()    //Calling FileServer 
 }
