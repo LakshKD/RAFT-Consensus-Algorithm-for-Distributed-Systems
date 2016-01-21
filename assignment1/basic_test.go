@@ -62,14 +62,14 @@ func TestTCPSimple(t *testing.T) {
 	 }
     
      // Delete the file
-   /*
+   
 	 fmt.Fprintf(conn, "delete %v\r\n", name) 
 	 scanner.Scan()
 	 resp = scanner.Text()
 	 //fmt.Println(resp)
      arr = strings.Split(resp, " ")
      expect(t, arr[0], "OK")
-     */
+     
 }
 
 // Useful testing function
