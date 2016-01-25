@@ -120,7 +120,7 @@ func RequestHandler(conn net.Conn) {
             conn.Close()   
           } 
           
-          // fmt.Println("dsfsdfds")
+          
            
            ver     :=   strconv.FormatInt(files[p[1]].version,10)
            nmbytes :=   strconv.Itoa(files[p[1]].numofbytes)
@@ -128,8 +128,6 @@ func RequestHandler(conn net.Conn) {
             
            conn.Write([]byte("CONTENTS"+" "+ver+" "+nmbytes+" "+exp+" "+"\r\n"))
            conn.Write([]byte(data))
-          //fmt.Println("heyo")
-          //fmt.Println(files)
           conn.Write([]byte("\r\n"))
           mutex.Unlock()
         }else{
@@ -142,10 +140,10 @@ func RequestHandler(conn net.Conn) {
            if cmdlen == 3 || cmdlen == 4 {
 
                 if cmdlen == 3{
-
+			mutex.Lock()
                   if _, err := os.Stat(p[1]); err == nil {   //File Exists on the server
 	                 //fmt.Println("inside write")
-                  mutex.Lock()
+                  
                   ioutil.WriteFile(p[1],[]byte(j[1]),0777)    
 		              b, _ := strconv.Atoi(p[2])
 		              expt := files[p[1]].exptime
@@ -221,15 +219,17 @@ func RequestHandler(conn net.Conn) {
 
              
      }else if p[0] == "cas"{
-
+         
+            //fmt.Println(files)
         cmdlen := len(p)
            if cmdlen == 4 || cmdlen == 5 {
+           mutex.Lock()
           if cmdlen == 4{
             if _, err := os.Stat(p[1]); err == nil {
-
+               //mutex.Lock()
               s := strconv.FormatInt(files[p[1]].version,10)
               if s == strings.TrimSpace(p[2]){
-                   mutex.Lock()
+                   
                    ioutil.WriteFile(p[1],[]byte(j[1]),0777)
                     v   := files[p[1]].version
                     b,_ := strconv.Atoi(strings.TrimSpace(p[3]))            //numofbytes
@@ -241,13 +241,14 @@ func RequestHandler(conn net.Conn) {
                   } 
                   s1 := strconv.FormatInt(files[p[1]].version,10)     
                   conn.Write([]byte("OK" +" "+s1+"\r\n"))
-                    mutex.Unlock()
+                    
                }else {
                    conn.Write([]byte("ERR_VERSION "))
                    conn.Write([]byte(s+"\r\n"))
                    conn.Close()
                    return
                }
+              //mutex.Unlock()
           }else{
            conn.Write([]byte("ERR_FILE_NOT_FOUND\n"))    
              conn.Close()
@@ -255,28 +256,35 @@ func RequestHandler(conn net.Conn) {
           }
         }else if cmdlen == 5{
             if _, err := os.Stat(p[1]); err == nil {
-
-              s := strconv.FormatInt(files[p[1]].version,10)
+		
+               //mutex.Lock()
+                  s := strconv.FormatInt(files[p[1]].version,10)
+	          
               if s == strings.TrimSpace(p[2]){
-                   mutex.Lock()
+                   
+		    //fmt.Println("Aquired Lock"+j[1])
                    ioutil.WriteFile(p[1],[]byte(j[1]),0777)
                     v   := files[p[1]].version
                     b,_ := strconv.Atoi(strings.TrimSpace(p[3]))            //numofbytes
                     e,_ := strconv.ParseInt(strings.TrimSpace(p[4]),10,64)           //exptime
                     delete(files,p[1])
-                    v=v+1                                 //Updating the version
+                    v=v+1 
+                    //fmt.Println(v)                                //Updating the version
                     files[p[1]] = Filestats {            //Creating a new entry for the file in the map
                      v,b,e,time.Now().Unix(),
                   } 
+ 		  
                   s1 := strconv.FormatInt(files[p[1]].version,10)     
                   conn.Write([]byte("OK" +" "+s1+"\r\n"))
-                    mutex.Unlock()
+                    
                }else {
                    conn.Write([]byte("ERR_VERSION "))
                    conn.Write([]byte(s+"\r\n"))
                    conn.Close()
                    return
                }
+               //fmt.Println("out"+j[1])
+               //mutex.Unlock()
           }else{
            conn.Write([]byte("ERR_FILE_NOT_FOUND\n"))    
              conn.Close()
@@ -285,9 +293,12 @@ func RequestHandler(conn net.Conn) {
            
 
         }
+       //time.Sleep(10 * time.Second)
+       mutex.Unlock()
       }else{
            conn.Write([]byte("ERR_CMD_ERR\n"))    
           }
+        
      
      }else if p[0] == "delete"{
 
@@ -319,5 +330,4 @@ func RequestHandler(conn net.Conn) {
 func main() {  
   serverMain()    
 }
-
 
