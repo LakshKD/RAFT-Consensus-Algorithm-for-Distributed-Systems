@@ -39,8 +39,10 @@ Note :- Inside the RequestHandler all the four commands i.e read,write,cas and d
      *In order to handle the concurrency i have used the sync package that will provide the lock() and unlock() function. Whenever there is some updations peformed on the file then the client will acquire the locks.
 
      *Whenever the updations are performed on the map then also the clients will acquire the locks().
+   (Tested the server on 5 multiple clients simultaneously)
+      *I have used wait group to generate 5 clients that will try to access the server at the same time and read and writes are performed successfully and when the 5 clients try to do the cas at the same time only one of them will succeed and finally 4 have ERR_VERSION error and only one of them will succeed.
 
-
+* I have applied the mutex locks on the entire map so whenever any of the operation is performed then the clients will lock the entire map.
 
 Assumptions:-
 
@@ -68,11 +70,14 @@ In case of write command
      case-1(File does not exists on the server)   
         *> Then file will be created with expiry time as "exptime" and creation time will be the current time of the server. This file will gets deleted when the creation time (ctime) + exptime of this file is less than the current time of the server. 
 
-Testing the Server:-
+*Testing the Server:-
 
  1. I have tested the server with the file basic_test.go.
  2. I have checked the file server with "go test" then OK is coming.
  3. I have checked the file server with "go test -race" then there is one Race condition is coming. 
+ 
+*Bugs
+ 1.When i have tested the server with the basic_test.go file then sometimes it is allowing two clients to enter into the cas function at the file server but sometimes it is depicting the correct behaviour.
 
  Reference:-
 
@@ -82,3 +87,4 @@ Testing the Server:-
  4. https://blog.golang.org/go-maps-in-action
  5. https://gobyexample.com/maps
  6. http://loige.co/simple-echo-server-written-in-go-dockerized/
+ 7. http://stackoverflow.com/questions/19208725/example-for-sync-waitgroup-correct
