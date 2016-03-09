@@ -1,0 +1,25 @@
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"net"
+	"strconv"
+	"strings"
+	"testing"
+       "time"
+	"sync"
+)
+
+// Simple serial check of getting and setting
+func TestTCPSimple(t *testing.T) {
+	
+	
+}
+
+// Useful testing function
+func expect(t *testing.T, a string, b string) {
+	if a != b {
+		t.Error(fmt.Sprintf("Expected %v, found %v", b, a)) // t.Error is visible when running `go test -verbose`
+	}
+}
