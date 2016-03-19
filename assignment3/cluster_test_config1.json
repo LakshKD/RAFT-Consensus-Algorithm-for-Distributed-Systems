@@ -1,9 +1,13 @@
-{"Peers":[
+{
+
+   "cluster":[
       {"Id": 1, "Host":"localhost","port":5001},
       {"Id": 2, "Host":"localhost","port":5002},
       {"Id": 3, "Host":"localhost","port":5003},
       {"Id": 4, "Host":"localhost","port":5004},
       {"Id": 5, "Host":"localhost","port":5005}
-    ]
+    ],
+  "ElectionTimeout":150,
+  "HeartbeatTimeout":100
 }
 

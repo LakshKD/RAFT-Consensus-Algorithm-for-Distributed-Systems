@@ -1,0 +1,259 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+        "errors"
+        "io/ioutil"	
+	cluster "github.com/cs733-iitb/cluster"
+	log1 "github.com/cs733-iitb/log"
+)
+
+var sm *StateMachine
+
+type Event interface{}
+
+// Index is valid only if err == nil
+type CommitInfo struct {
+	Data  []byte
+	Index int64 // or int .. whatever you have in your code
+	Err   error // Err can be errred
+}
+
+// This is an example structure for Config .. change it to your convenience.
+type Config struct {
+	cluster          []NetConfig // Information about all servers, including this.
+	Id               int         // this node's id. One of the cluster's entries should match.
+	LogDir           string      // Log file directory for this node
+	ElectionTimeout  int
+	HeartbeatTimeout int
+}
+func ConfigRaft(configuration interface{}) (config *Config, err error) {
+	var cfg Config
+	var ok bool
+	var configFile string
+        //var err error
+	if configFile, ok = configuration.(string); ok {
+		var f *os.File
+		if f, err = os.Open(configFile); err != nil {
+			return nil ,err
+		}
+		defer f.Close()
+		dec := json.NewDecoder(f)
+		if err = dec.Decode(&cfg); err != nil {
+			return nil , err
+		}
+	} else if cfg, ok = configuration.(Config); !ok {
+		return nil, errors.New("Expected a configuration.json file or a Config structure")
+	}
+	return &cfg, nil
+}
+
+type NetConfig struct {
+	Id   int
+	Host string
+	Port int
+}
+
+type RaftNode struct { // implements Node interface
+
+	config        *Config
+	sm            *StateMachine
+	srv           cluster.Server
+	lg            log1.Log
+	eventCh       chan Event
+	CommitChannel chan CommitInfo
+	timeoutCh     <-chan int
+}
+
+
+// It inits the cluster (using the cluster package discussed above), inits the log, reads/entries from the log, creates a state machine in
+//follower mode with the log, reads the node-specific file that stores lastVotedFor and term,
+
+
+
+func New(myid int, configuration interface{}) (n Node, err error) {
+	//var Raft RaftNode
+	 
+         Raft := new(RaftNode)
+         n = Raft
+        var config *Config
+	// var err1 error
+	var p []string
+	var dat []byte
+	if config, err = ConfigRaft(configuration); err != nil {
+		return nil, err
+	}
+	config.Id = myid
+	if config.Id == 1 {
+
+		config.LogDir = "log_file_1"
+
+	} else if config.Id == 2 {
+
+		config.LogDir = "log_file_2"
+
+	} else if config.Id == 3 {
+
+		config.LogDir = "log_file_3"
+
+	} else if config.Id == 4 {
+
+		config.LogDir = "log_file_4"
+
+	} else if config.Id == 5 {
+
+		config.LogDir = "log_file_5"
+	}
+	//  Reading the LastvotedFor and Term from the Persistent Store
+	if myid == 1 {
+
+		dat, err = ioutil.ReadFile("persistent_store_1")
+		if err != nil {
+			panic(err)
+		}
+		p = strings.Split(string(dat), " ")
+	} else if myid == 2 {
+		dat, err = ioutil.ReadFile("persistent_store_2")
+		if err != nil {
+			panic(err)
+		}
+		p = strings.Split(string(dat), " ")
+	} else if myid == 3 {
+
+		dat, err = ioutil.ReadFile("persistent_store_3")
+		if err != nil {
+			panic(err)
+		}
+		p = strings.Split(string(dat), " ")
+	} else if myid == 4 {
+
+		dat, err = ioutil.ReadFile("persistent_store_4")
+		if err != nil {
+			panic(err)
+		}
+		p = strings.Split(string(dat), " ")
+	} else if myid == 5 {
+
+		dat, err := ioutil.ReadFile("persistent_store_5")
+		if err != nil {
+			panic(err)
+		}
+		p = strings.Split(string(dat), " ")
+	}
+
+	p[0] = strings.TrimSpace(p[0])
+	p[1] = strings.TrimSpace(p[1])
+
+	smterm, _ := strconv.Atoi(p[1])
+	smvotedfor, _ := strconv.Atoi(p[0])
+	//srvr := new(cluster.Server)
+	// srvr.inbox = make(chan *Envelope, config.InboxSize)
+	//srvr.outbox = make(chan *Envelope, config.OutboxSize)
+
+	//Raft.srv = srvr
+	Raft.config = config
+	nodesid := []int
+	j := 0
+	for i := 0; i <= 4; i++ {
+
+		if config.cluster[i].Id != myid {
+			nodesid[j] = config.cluster[i].Id
+			j = j + 1
+		}
+	}
+	sm = &StateMachine{id: myid, term: smterm, peers: nodesid, CommitIndex: 2, votedfor: smvotedfor, status: "Follower"}
+	Raft.sm = sm
+	Events := make(chan Event)
+	commitchannel := make(chan CommitInfo)
+	timeout := make(chan int)
+	Raft.eventCh = Events
+	Raft.CommitChannel = commitchannel
+	Raft.timeoutCh = timeout
+
+	lg,_ := log1.Open(config.LogDir)
+	Raft.lg = *lg
+
+	return 
+}
+
+
+type Node interface {
+
+	// Client's message to Raft node
+	Append([]byte)
+
+	// A channel for client to listen on. What goes into Append must come out of here at some point.
+	CommitChannel() <-chan CommitInfo
+
+	// Last known committed index in the log.
+	CommittedIndex() int //This could be -1 until the system stabilizes.
+
+	// Returns the data at a log index, or an error.
+	//Get(index int) (err, []byte)
+
+	// Node's id
+	Id()
+
+	// Id of leader. -1 if unknown
+	LeaderId() int
+
+	// Signal to shut down all goroutines, stop sockets, flush log and close it, cancel timers.
+	Shutdown()
+}
+
+func (rn *RaftNode) Append(data []byte) {
+
+	rn.eventCh <- AppendEv{data: data}
+
+}
+
+func (rn *RaftNode) Get(index int) ([]byte, error) {
+	return log1.ldb.Get(toBytes(index), nil)
+
+}
+
+func (rn *RaftNode) Id() int {
+
+	return rn.config.Id
+
+}
+
+func (rn *RaftNode) CommittedIndex() int {
+	return rn.sm.CommitIndex
+}
+
+func (rn *RaftNode) LeaderId() int {
+
+	return rn.sm.LeaderID
+
+}
+
+func (rn *RaftNode) Shutdown() {
+
+}
+
+func (rn *RaftNode) processEvents() {
+
+	for {
+		var ev Event
+		select {
+		case ev = <-eventCh:
+			{
+				ev = msg
+			}
+
+		case <-timeoutCh:
+			{
+				ev = Timeout{}
+			}
+		}
+
+		actions := sm.ProcessEvent(ev)
+
+		fmt.Println(actions)
+	}
+}
