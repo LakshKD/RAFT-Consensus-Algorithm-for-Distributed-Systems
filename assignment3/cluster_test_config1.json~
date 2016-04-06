@@ -8,6 +8,6 @@
       {"Id": 5, "Host":"localhost","port":5005}
     ],
   "ElectionTimeout":3000,
-  "HeartbeatTimeout":50
+  "HeartbeatTimeout":90
 }
 
